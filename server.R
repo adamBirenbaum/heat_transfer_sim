@@ -1,7 +1,21 @@
 server <- function(input,output){
   
   
-  
+  observeEvent(input$sim_type,{
+    
+    if (input$sim_type == "Transient"){
+      output$ui_transient <- renderUI({
+        tagList(
+          textInput("total_time",label = "Total Time"),
+          textInput("time_steps",label = "# Time Steps")
+          
+        )
+        
+      })
+      
+    }
+    
+  })
   
   output$material_conduct <- renderText({
     
@@ -125,9 +139,16 @@ server <- function(input,output){
     
     n <- length(m)
     
+    sim_type <- input$sim_type
+    if (sim_type == "Steady State"){
+      
+      
+   
+    
     M <- matrix(0,nrow = n, ncol = n)
     B <- matrix(0, nrow = n, ncol = 1)
     
+
     for (i in 1:n){
       current_neighbors <-  neighbor_m[,i]
       current_neighbors <- current_neighbors[!is.na(current_neighbors)]
@@ -140,14 +161,19 @@ server <- function(input,output){
         h_total <- switch(missing_direct,"N" = h_top ,"W" =  h_left,"E" = h_right,"S" = h_bottom)
         b_total <- switch(missing_direct,"N" = h_top * T_top ,"W" =  h_left * T_left,
                           "E" = h_right * T_right ,"S" = h_bottom * T_bottom )
-        M[i,i] <- -(As*h_total + 3/2*k*A/dx)
-        for (j in current_neighbors){
-          M[i,j] <- k*A/2/dx
-        }
+        
+        
+        M[i,i] <- -(As*h_total + 2*k*A/dx)
+        
+        inside_node <- switch(missing_direct,"N" = "S","W" = "E","S" = "N", "E" = "W")
+
+        ## I BELIEVE THE TRUE TERM SHOULDN'T HAVE A /2 term, but its rendering weird solutions
+        M[i,unname(current_neighbors)] <- ifelse(names(current_neighbors) == inside_node,k*A/dx,k*A/2/dx)
+        # for (j in current_neighbors){
+        #   #M[i,j] <- k*A/2/dx
+        # }
         
         B[i,1] <- -As * b_total
-        
-        
         
         
       }else if (is_corner[i]){
@@ -187,9 +213,129 @@ server <- function(input,output){
                      y = rev(as.numeric(row(m)))*dx*100,
                      temp = Temps[,1])
     
+
     ggplot(df, aes(x = x, y =y, z = temp)) + geom_raster(aes(fill = temp))+geom_contour(color = "black",size = .2) +
       scale_fill_distiller(expression("Temp."~"("*degree*"C)"),palette = "Spectral") + 
       coord_equal() + theme_minimal() + labs(x = "Width (cm)", y = "Height (cm)") + theme(panel.grid = element_blank())
+    
+    }else{
+      total_time <- 2
+      dt <- 1
+      n_time_steps <- (total_time / dt + 1)
+      
+      
+      M <- matrix(0,nrow = n*(n_time_steps - 1), ncol = n*(n_time_steps - 1))
+      B <- matrix(0, nrow = n*(n_time_steps - 1), ncol = 1)
+      
+      initial_temp <- 22
+      
+      
+      alpha <- 9.7E-5
+      tau <- alpha*dt/dx^2
+      
+      for (t in 1:(n_time_steps -1)){
+        for (i in 1:n){
+          print(i)
+          current_neighbors <-  neighbor_m[,i]
+          current_neighbors <- current_neighbors[!is.na(current_neighbors)]
+          neigh_direct <- names(current_neighbors)
+          
+          if (is_one_side[i]){
+            
+            missing_direct <- paste0(c("N","E","S","W")[!c("N","E","S","W") %in% neigh_direct],collapse = "")
+            
+            h_total <- switch(missing_direct,"N" = h_top ,"W" =  h_left,"E" = h_right,"S" = h_bottom)
+            b_total <- switch(missing_direct,"N" = h_top * T_top ,"W" =  h_left * T_left,
+                              "E" = h_right * T_right ,"S" = h_bottom * T_bottom )
+            
+            
+            inside_node <- switch(missing_direct,"N" = "S","W" = "E","S" = "N", "E" = "W")
+            
+            
+            
+            # for (j in current_neighbors){
+            #   #M[i,j] <- k*A/2/dx
+            # }
+            row_ind <- (n*(t-1) + i)
+            
+            
+            if (t == 1){
+              B[row_ind,1] <- -2*dx/k* b_total - initial_temp/tau
+              
+            }else{
+              B[row_ind,1] <- -2*dx/k* b_total
+              prev_ind <- (n*(t-2) + i)
+              M[prev_ind,prev_ind] <- 1/tau
+              
+            }
+            
+            M[row_ind,row_ind] <- -(dx*2/k*h_total + 4 + 1/tau)
+            
+            M[row_ind,(n*(t-1) + current_neighbors)] <- ifelse(names(current_neighbors) == inside_node,2,1)
+            
+            
+            
+          }else if (is_corner[i]){
+            
+            missing_direct <- paste0(c("N","E","S","W")[!c("N","E","S","W") %in% neigh_direct],collapse = "")
+            
+            h_total <- switch(missing_direct,"NE" = h_top + h_right,"NW" = h_top + h_left,"ES" = h_right + h_bottom,"SW" = h_bottom + h_left)
+            b_total <- switch(missing_direct,"NE" = h_top * T_top + h_right * T_right,"NW" = h_top * T_top + h_left * T_left,
+                              "ES" = h_right * T_right + h_bottom * T_bottom,"SW" = h_bottom * T_bottom + h_left * T_left)
+            
+            
+            row_ind <- (n*(t-1) + i)
+            
+            
+            if (t == 1){
+              B[row_ind,1] <- -2*dx/k* b_total - initial_temp/tau
+              
+            }else{
+              B[row_ind,1] <- -2*dx/k* b_total
+              prev_ind <- (n*(t-2) + i)
+              M[prev_ind,prev_ind] <- 1/tau
+              
+            }
+            
+            M[row_ind,row_ind] <- -(dx*2/k*h_total + 4 + 1/tau)
+            
+            M[row_ind,(n*(t-1) + current_neighbors)] <- 2
+            
+            
+            
+            
+            
+          }else{
+            
+            row_ind <- (n*(t-1) + i)
+            
+            
+            if (t == 1){
+              B[row_ind,1] <- -initial_temp/tau
+              
+            }
+            
+            M[row_ind,row_ind] <- -(4 + 1/tau)
+            
+            M[row_ind,(n*(t-1) + current_neighbors)] <- 1
+            
+            
+            
+          }
+          
+          
+        }
+        
+      }
+      
+      Temps <- solve(M) %*% B
+      
+      df <- data.frame(x = as.numeric(col(m))*dx*100,
+                       y = rev(as.numeric(row(m)))*dx*100,
+                       temp = Temps[,1],
+                       frame = rep(c(1,2),each = n))
+      
+    }
     
   })
   

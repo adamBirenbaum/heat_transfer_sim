@@ -1,6 +1,9 @@
 library(shiny)
 library(ggplot2)
 library(shinydashboard)
+#library(gganimate)
+library(shinyWidgets)
+
 
 material_df <<- read.csv("D:/abire/Documents/heat_transfer_simulations/conduction_material.csv",stringsAsFactors = F)
 
@@ -26,11 +29,15 @@ body <- dashboardBody(
                                   sliderInput(inputId = "dim_y",label = h4("Height (cm)"),min = 1,max = 100,value = 10)
                            ),
                            column(width = 4,
-                                  sliderInput("n_nodes",h4("# Nodes"), min = 50, max = 1000,value = 500)
+                                  sliderInput("n_nodes",h4("# Nodes"), min = 50, max = 1000,value = 500),
+                                  radioButtons("sim_type",h4("Simulation Type"),choices = c("Steady State", "Transient"),
+                                               selected = "Steady State")
+                                  
                            ),
                            column(width = 4,
                                   selectizeInput("material",h4("Material"),choices = material_df$material,selected = "Aluminum"),
-                                  textOutput("material_conduct")
+                                  textOutput("material_conduct"),
+                                  uiOutput("ui_transient")
                                   
                            )
                          )
