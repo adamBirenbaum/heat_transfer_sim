@@ -140,12 +140,12 @@ server <- function(input,output){
         h_total <- switch(missing_direct,"N" = h_top ,"W" =  h_left,"E" = h_right,"S" = h_bottom)
         b_total <- switch(missing_direct,"N" = h_top * T_top ,"W" =  h_left * T_left,
                           "E" = h_right * T_right ,"S" = h_bottom * T_bottom )
-        M[i,i] <- -(As/2*h_total + 3/2*k*A/dx)
+        M[i,i] <- -(As*h_total + 3/2*k*A/dx)
         for (j in current_neighbors){
           M[i,j] <- k*A/2/dx
         }
         
-        B[i,1] <- -As/2 * b_total
+        B[i,1] <- -As * b_total
         
         
         
